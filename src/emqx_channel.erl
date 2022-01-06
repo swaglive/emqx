@@ -457,6 +457,7 @@ handle_in(?DISCONNECT_PACKET(ReasonCode, Properties),
           Channel = #channel{conninfo = ConnInfo}) ->
     NConnInfo = ConnInfo#{disconn_props => Properties},
     NChannel = maybe_clean_will_msg(ReasonCode, Channel#channel{conninfo = NConnInfo}),
+    % BOOKMARK
     process_disconnect(ReasonCode, Properties, NChannel);
 
 handle_in(?AUTH_PACKET(), Channel) ->
@@ -701,12 +702,16 @@ maybe_clean_will_msg(_ReasonCode, Channel) ->
     Channel.
 
 %% MQTT-v5.0: 3.14.2.2.2 Session Expiry Interval
+%% BOOKMARK
 process_disconnect(_ReasonCode, #{'Session-Expiry-Interval' := Interval},
                    Channel = #channel{conninfo = #{expiry_interval := 0}})
     when Interval > 0 ->
+    ?LOG(error, "Process Disconnect 1"),
     handle_out(disconnect, ?RC_PROTOCOL_ERROR, Channel);
 
+%% BOOKMARK
 process_disconnect(ReasonCode, Properties, Channel) ->
+    ?LOG(error, "Process Disconnect 2"),
     NChannel = maybe_update_expiry_interval(Properties, Channel),
     {ok, {close, disconnect_reason(ReasonCode)}, NChannel}.
 
