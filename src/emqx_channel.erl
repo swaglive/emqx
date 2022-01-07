@@ -404,6 +404,7 @@ handle_in(?PUBCOMP_PACKET(PacketId, _ReasonCode), Channel = #channel{session = S
 
 handle_in(Packet = ?SUBSCRIBE_PACKET(PacketId, Properties, TopicFilters),
           Channel = #channel{clientinfo = ClientInfo = #{zone := Zone}}) ->
+    ?LOG(debug, "BOOKMARK SUBSCRIBE - 1"),
     case emqx_packet:check(Packet) of
         ok ->
             TopicFilters0 = parse_topic_filters(TopicFilters),
@@ -456,6 +457,7 @@ handle_in(?DISCONNECT_PACKET(ReasonCode, Properties),
           Channel = #channel{conninfo = ConnInfo}) ->
     NConnInfo = ConnInfo#{disconn_props => Properties},
     NChannel = maybe_clean_will_msg(ReasonCode, Channel#channel{conninfo = NConnInfo}),
+    % BOOKMARK
     process_disconnect(ReasonCode, Properties, NChannel);
 
 handle_in(?AUTH_PACKET(), Channel) ->
@@ -633,12 +635,14 @@ after_message_acked(ClientInfo, Msg, PubAckProps) ->
 
 -compile({inline, [process_subscribe/3]}).
 process_subscribe(TopicFilters, SubProps, Channel) ->
+    ?LOG(debug, "BOOKMARK SUBSCRIBE - 2"),
     process_subscribe(TopicFilters, SubProps, Channel, []).
 
 process_subscribe([], _SubProps, Channel, Acc) ->
     {lists:reverse(Acc), Channel};
 
 process_subscribe([Topic = {TopicFilter, SubOpts}|More], SubProps, Channel, Acc) ->
+    ?LOG(debug, "BOOKMARK SUBSCRIBE - 3"),
     case check_sub_caps(TopicFilter, SubOpts, Channel) of
          ok ->
             {ReasonCode, NChannel} = do_subscribe(TopicFilter,
@@ -654,6 +658,7 @@ process_subscribe([Topic = {TopicFilter, SubOpts}|More], SubProps, Channel, Acc)
 do_subscribe(TopicFilter, SubOpts = #{qos := QoS}, Channel =
              #channel{clientinfo = ClientInfo = #{mountpoint := MountPoint},
                       session = Session}) ->
+    ?LOG(debug, "BOOKMARK SUBSCRIBE - 4"),
     NTopicFilter = emqx_mountpoint:mount(MountPoint, TopicFilter),
     NSubOpts = enrich_subopts(maps:merge(?DEFAULT_SUBOPTS, SubOpts), Channel),
     case emqx_session:subscribe(ClientInfo, NTopicFilter, NSubOpts, Session) of
@@ -969,6 +974,8 @@ handle_info({sock_closed, Reason}, Channel = #channel{conn_state = connecting}) 
 handle_info({sock_closed, Reason}, Channel =
             #channel{conn_state = connected,
                      clientinfo = ClientInfo = #{zone := Zone}}) ->
+    ?LOG(debug, "BOOKMARK 3.3 ~p", [Reason]),
+    ?LOG(debug, "BOOKMARK 3.3 ~p", [Channel]),
     emqx_zone:enable_flapping_detect(Zone)
         andalso emqx_flapping:detect(ClientInfo),
     Channel1 = ensure_disconnected(Reason, mabye_publish_will_msg(Channel)),
@@ -1623,8 +1630,40 @@ parse_topic_filters(TopicFilters) ->
 ensure_disconnected(Reason, Channel = #channel{conninfo = ConnInfo,
                                                clientinfo = ClientInfo}) ->
     NConnInfo = ConnInfo#{disconnected_at => erlang:system_time(millisecond)},
+    ?LOG(debug, "BOOKMARK 5 ClientInfo ~p", [ClientInfo]),
+
     ok = run_hooks('client.disconnected', [ClientInfo, Reason, NConnInfo]),
+    maybe_send_session_unsubscribed(ClientInfo),
     Channel#channel{conninfo = NConnInfo, conn_state = disconnected}.
+
+%%--------------------------------------------------------------------
+%% Maybe send session unsubscribed
+
+maybe_send_session_unsubscribed(ClientInfo) ->
+    ClientId = maps:get(clientid, ClientInfo, undefined),
+    ?LOG(debug, "BOOKMARK 5 ClientId ~p", [ClientId]),
+    case ets:lookup(emqx_subid, ClientId) of
+        [] ->
+            ?LOG(debug, "BOOKMARK 5 Client not found 0", [ClientInfo]);
+            % emqx_ctl:print("Not Found.~n");
+        [{_, Pid}] ->
+            case ets:match_object(emqx_suboption, {{Pid, '_'}, '_'}) of
+                [] -> ?LOG(debug, "BOOKMARK 5 Client not found 1", [ClientInfo]);
+                Suboption ->
+                    ?LOG(debug, "BOOKMARK 5 suboptions ~p", [Suboption]),
+                    % [print({emqx_suboption, Sub}) || Sub <- Suboption]
+                    [?LOG(debug, "BOOKMARK 5 sub ~p", [Sub]) || Sub <- Suboption],
+                    [?LOG(debug, "BOOKMARK 5 topic ~p", [Topic]) || {{_, Topic}, _} <- Suboption],
+                    [send_session_unsubscribed(ClientInfo, Opts, Topic) || {{_, Topic}, Opts} <- Suboption]
+
+            end
+    end.
+
+send_session_unsubscribed(_, _, []) -> ok;
+
+send_session_unsubscribed(ClientInfo, Opts, [Topic|Rest]) ->
+    ok = run_hooks('session.unsubscribed', [ClientInfo, Topic, Opts]),
+    send_session_unsubscribed(ClientInfo, Opts, Rest).
 
 %%--------------------------------------------------------------------
 %% Maybe Publish will msg

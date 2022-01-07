@@ -468,6 +468,8 @@ handle_info({event, _Other}, State = #state{channel = Channel}) ->
     return(State);
 
 handle_info(Info, State) ->
+    ?LOG(debug, "BOOKMARK 2.1 ~p", [Info]),
+    ?LOG(debug, "BOOKMARK 2.2 ~p", [State]),
     with_channel(handle_info, [Info], State).
 
 %%--------------------------------------------------------------------
@@ -579,6 +581,8 @@ with_channel(Fun, Args, State = #state{channel = Channel}) ->
         {ok, Replies, NChannel} ->
             return(postpone(Replies, State#state{channel= NChannel}));
         {shutdown, Reason, NChannel} ->
+            ?LOG(debug, "BOOKMARK 4.1 ~p", [Reason]),
+            ?LOG(debug, "BOOKMARK 4.1 ~p", [State]),
             shutdown(Reason, State#state{channel = NChannel});
         {shutdown, Reason, Packet, NChannel} ->
             NState = State#state{channel = NChannel},

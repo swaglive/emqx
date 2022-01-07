@@ -242,6 +242,7 @@ stats(Session) -> info(?STATS_KEYS, Session).
       -> {ok, session()} | {error, emqx_types:reason_code()}).
 subscribe(ClientInfo = #{clientid := ClientId}, TopicFilter, SubOpts,
           Session = #session{subscriptions = Subs}) ->
+    ?LOG(debug, "BOOKMARK SUBSCRIBE - 5"),
     IsNew = not maps:is_key(TopicFilter, Subs),
     case IsNew andalso is_subscriptions_full(Session) of
         false ->

@@ -1,0 +1,9 @@
+{erlang_plugins,
+  [ {emqx_reloader, {git, "https://github.com/emqx/emqx-reloader.git", {tag, "v4.2.14"}}}
+  ]
+}.
+
+{elixir_plugins,
+  [ {emqx_elixir_plugin, {git, "https://github.com/emqx/emqx-elixir-plugin.git", {branch, "3.0.0"}}}
+  ]
+}.

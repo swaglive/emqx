@@ -62,6 +62,7 @@ start_link() ->
 
 -spec(register_sub(pid(), emqx_types:subid()) -> ok).
 register_sub(SubPid, SubId) when is_pid(SubPid) ->
+    ?LOG(debug, "BOOKMARK SUBSCRIBE - 8"),
     case ets:lookup(?SUBMON, SubPid) of
         [] ->
             gen_server:cast(?HELPER, {register_sub, SubPid, SubId});
@@ -123,6 +124,7 @@ handle_call(Req, _From, State) ->
     {reply, ignored, State}.
 
 handle_cast({register_sub, SubPid, SubId}, State = #{pmon := PMon}) ->
+    ?LOG(debug, "BOOKMARK SUBSCRIBE - 9"),
     true = (SubId =:= undefined) orelse ets:insert(?SUBID, {SubId, SubPid}),
     true = ets:insert(?SUBMON, {SubPid, SubId}),
     {noreply, State#{pmon := emqx_pmon:monitor(SubPid, PMon)}};

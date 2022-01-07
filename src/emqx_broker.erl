@@ -125,12 +125,15 @@ subscribe(Topic, SubOpts) when is_binary(Topic), is_map(SubOpts) ->
 
 -spec(subscribe(emqx_topic:topic(), emqx_types:subid(), emqx_types:subopts()) -> ok).
 subscribe(Topic, SubId, SubOpts0) when is_binary(Topic), ?is_subid(SubId), is_map(SubOpts0) ->
+    ?LOG(debug, "BOOKMARK SUBSCRIBE - 6"),
     SubOpts = maps:merge(?DEFAULT_SUBOPTS, SubOpts0),
     case ets:member(?SUBOPTION, {SubPid = self(), Topic}) of
         false -> %% New
+            ?LOG(debug, "BOOKMARK SUBSCRIBE - 7 new ~p", [SubPid]),
             ok = emqx_broker_helper:register_sub(SubPid, SubId),
             do_subscribe(Topic, SubPid, with_subid(SubId, SubOpts));
         true -> %% Existed
+            ?LOG(debug, "BOOKMARK SUBSCRIBE - 7 exisited ~p", [SubPid]),
             set_subopts(SubPid, Topic, with_subid(SubId, SubOpts)),
             ok %% ensure to return 'ok'
     end.
@@ -143,7 +146,13 @@ with_subid(SubId, SubOpts) ->
 
 %% @private
 do_subscribe(Topic, SubPid, SubOpts) ->
+    ?LOG(debug, "BOOKMARK SUBSCRIBE - 9 Topic = ~p", [Topic]),
+    ?LOG(debug, "BOOKMARK SUBSCRIBE - 9 SubPid = ~p", [SubPid]),
+    ?LOG(debug, "BOOKMARK SUBSCRIBE - 9 SubOpts = ~p", [SubOpts]),
     true = ets:insert(?SUBSCRIPTION, {SubPid, Topic}),
+    ?LOG(debug, "BOOKMARK SUBSCRIBE - 9 query = ~p", [
+        ets:match(?SUBSCRIPTION, '$1')
+    ]),
     Group = maps:get(share, SubOpts, undefined),
     do_subscribe(Group, Topic, SubPid, SubOpts).
 
